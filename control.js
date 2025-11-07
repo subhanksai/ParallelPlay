@@ -317,10 +317,10 @@ let pathCache = null;
 let pathCacheTimestamp = 0;
 const PATH_CACHE_TTL = 5000; // 5 second TTL
 
-// Helper: Read paths with caching
-function readPaths() {
+// Helper: Read paths with caching (async)
+async function readPaths() {
   const now = Date.now();
-  
+
   // Return cached paths if valid
   if (pathCache && (now - pathCacheTimestamp) < PATH_CACHE_TTL) {
     return pathCache;
@@ -328,19 +328,22 @@ function readPaths() {
 
   logAction(`Reading paths from ${PATHS_FILE}`);
   try {
-    if (!fs.existsSync(PATHS_FILE)) {
+    // Use promises-based fs access instead of existsSync
+    try {
+      await fs.promises.access(PATHS_FILE);
+    } catch (_) {
       logAction(`Paths file ${PATHS_FILE} does not exist`);
       return { masterFile: "", slaveFile: "" };
     }
 
-    // Use streaming for better memory efficiency
-    const content = fs.readFileSync(PATHS_FILE, "utf-8");
+    // Read file asynchronously
+    const content = await fs.promises.readFile(PATHS_FILE, "utf-8");
     const paths = {};
-    
-    // Use regex for faster parsing
+
+    // Use regex for faster parsing (preserve original logic)
     const masterMatch = content.match(/MASTER_VIDEO_PATH=(.+?)(?:\r?\n|$)/);
     const slaveMatch = content.match(/SLAVE_VIDEO_PATH=(.+?)(?:\r?\n|$)/);
-    
+
     paths.masterFile = masterMatch ? masterMatch[1] : "";
     paths.slaveFile = slaveMatch ? slaveMatch[1] : "";
 
@@ -454,7 +457,7 @@ app.post("/control", async (req, res) => {
 
   // Always read latest paths from file for all commands except savePaths
   if (command !== "savePaths") {
-    const paths = readPaths();
+    const paths = await readPaths();
     masterFile = masterFile || paths.masterFile;
     slaveFile = slaveFile || paths.slaveFile;
 
@@ -469,7 +472,7 @@ app.post("/control", async (req, res) => {
 
   switch (command) {
     case "play": {
-      const { masterFile, slaveFile } = readPaths();
+      const { masterFile, slaveFile } = await readPaths();
       if (!masterFile || !slaveFile) {
         return res.json({ error: "File paths not found. Save them first." });
       }
@@ -822,7 +825,7 @@ app.post("/control", async (req, res) => {
 
     case "sync": {
       // Always read the latest paths from file
-      const { masterFile, slaveFile } = readPaths();
+      const { masterFile, slaveFile } = await readPaths();
       if (!masterFile || !slaveFile) {
         return res.json({ error: "File paths not found. Save them first." });
       }
@@ -995,7 +998,7 @@ app.post("/control", async (req, res) => {
           logAction(`Paths saved successfully to ${PATHS_FILE}`);
 
           // Verify the file was written correctly
-          const savedPaths = readPaths();
+          const savedPaths = await readPaths();
           logAction(
             `Verification - read back from file: masterFile="${savedPaths.masterFile}", slaveFile="${savedPaths.slaveFile}"`
           );
