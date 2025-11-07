@@ -11,6 +11,15 @@ const express = require('express');
 const fetch = require('node-fetch');
 const fs = require('fs');
 const bodyParser = require('body-parser');
+const http = require('http');
+
+// Configure HTTP agent for connection pooling
+const keepAliveAgent = new http.Agent({
+  keepAlive: true,
+  maxSockets: 4,
+  maxFreeSockets: 2,
+  timeout: 60000,
+});
 
 // Initialize Express application
 const app = express();
@@ -79,18 +88,51 @@ async function sendCommand(url, password) {
   }
 }
 
-// Helper: Get VLC status
+// VLC status cache and connection pool
+const statusCache = new Map();
+const cacheTTL = 500; // 500ms TTL for cache
+
+// Helper: Get VLC status with caching and connection pooling
 async function getVLCStatus(url, password) {
+  const now = Date.now();
+  const cacheKey = `${url}:${password}`;
+  
+  // Check cache first
+  const cached = statusCache.get(cacheKey);
+  if (cached && (now - cached.timestamp) < cacheTTL) {
+    return cached.data;
+  }
+
   try {
+    // Reuse authorization header
+    const authHeader = "Basic " + Buffer.from(":" + password).toString("base64");
+    
     const res = await fetch(url, {
       headers: {
-        Authorization:
-          "Basic " + Buffer.from(":" + password).toString("base64"),
+        'Authorization': authHeader,
+        'Connection': 'keep-alive',
+        'Accept': 'application/json',
       },
+      agent: keepAliveAgent, // Use connection pooling
     });
-    return await res.json();
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    
+    // Update cache
+    statusCache.set(cacheKey, {
+      data,
+      timestamp: now
+    });
+
+    return data;
   } catch (err) {
     logError(`getVLCStatus error: ${err}`);
+    // Remove from cache on error
+    statusCache.delete(cacheKey);
     return null;
   }
 }
@@ -101,28 +143,48 @@ async function isFullscreen(url, password) {
   return data && typeof data.fullscreen !== "undefined" ? data.fullscreen : -1;
 }
 
-// Helper: Read paths
+// Path cache for better performance
+let pathCache = null;
+let pathCacheTimestamp = 0;
+const PATH_CACHE_TTL = 5000; // 5 second TTL
+
+// Helper: Read paths with caching
 function readPaths() {
-  logAction(`Reading paths from ${PATHS_FILE}`);
-  if (fs.existsSync(PATHS_FILE)) {
-    const content = fs.readFileSync(PATHS_FILE, "utf-8");
-    logAction(`File content: ${content}`);
-    const lines = content.split(/\r?\n/);
-    let masterFile = "",
-      slaveFile = "";
-    lines.forEach((line) => {
-      if (line.startsWith("MASTER_VIDEO_PATH="))
-        masterFile = line.replace("MASTER_VIDEO_PATH=", "");
-      if (line.startsWith("SLAVE_VIDEO_PATH="))
-        slaveFile = line.replace("SLAVE_VIDEO_PATH=", "");
-    });
-    logAction(
-      `Read paths: masterFile="${masterFile}", slaveFile="${slaveFile}"`
-    );
-    return { masterFile, slaveFile };
+  const now = Date.now();
+  
+  // Return cached paths if valid
+  if (pathCache && (now - pathCacheTimestamp) < PATH_CACHE_TTL) {
+    return pathCache;
   }
-  logAction(`Paths file ${PATHS_FILE} does not exist`);
-  return { masterFile: "", slaveFile: "" };
+
+  logAction(`Reading paths from ${PATHS_FILE}`);
+  try {
+    if (!fs.existsSync(PATHS_FILE)) {
+      logAction(`Paths file ${PATHS_FILE} does not exist`);
+      return { masterFile: "", slaveFile: "" };
+    }
+
+    // Use streaming for better memory efficiency
+    const content = fs.readFileSync(PATHS_FILE, "utf-8");
+    const paths = {};
+    
+    // Use regex for faster parsing
+    const masterMatch = content.match(/MASTER_VIDEO_PATH=(.+?)(?:\r?\n|$)/);
+    const slaveMatch = content.match(/SLAVE_VIDEO_PATH=(.+?)(?:\r?\n|$)/);
+    
+    paths.masterFile = masterMatch ? masterMatch[1] : "";
+    paths.slaveFile = slaveMatch ? slaveMatch[1] : "";
+
+    // Update cache
+    pathCache = paths;
+    pathCacheTimestamp = now;
+
+    logAction(`Read paths: masterFile="${paths.masterFile}", slaveFile="${paths.slaveFile}"`);
+    return paths;
+  } catch (err) {
+    logError(`Error reading paths: ${err}`);
+    return { masterFile: "", slaveFile: "" };
+  }
 }
 
 // Helper: Save paths
