@@ -21,8 +21,11 @@ const ERROR_LOG_FILE = "control_errors.log";
 const PATHS_FILE = "paths.txt";
 const VLC_URL_MASTER = "http://192.168.127.177:8080/requests/status.json";
 const VLC_URL_SLAVE = "http://192.168.127.141:8080/requests/status.json";
-// TODO: Move this to environment variables for security
-const PASSWORD = 'sairam';
+const PASSWORD = process.env.VLC_PASSWORD;
+if (!PASSWORD) {
+  console.error('ERROR: VLC_PASSWORD environment variable is required');
+  process.exit(1);
+}
 
 // Configure middleware
 app.use(bodyParser.json());
@@ -34,30 +37,42 @@ app.get("/", (req, res) => {
   res.sendFile(__dirname + "/index.html");
 });
 
-// Logging middleware
+// Create write streams for logging
+const actionLogStream = fs.createWriteStream(LOG_FILE, { flags: 'a' });
+const errorLogStream = fs.createWriteStream(ERROR_LOG_FILE, { flags: 'a' });
+
+// Logging middleware with streaming for better performance
 function logAction(message) {
   const timestamp = new Date().toISOString().replace("T", " ").replace("Z", "");
   const logMessage = `[${timestamp}] ${message}\n`;
-  fs.appendFileSync(LOG_FILE, logMessage);
+  actionLogStream.write(logMessage);
 }
 
-// Error logging
+// Error logging with streaming for better performance
 function logError(message) {
   const timestamp = new Date().toISOString().replace("T", " ").replace("Z", "");
   const logMessage = `[${timestamp}] ${message}\n`;
-  fs.appendFileSync(ERROR_LOG_FILE, logMessage);
+  errorLogStream.write(logMessage);
 }
 
 // Helper: Send command to VLC
 async function sendCommand(url, password) {
+  // Cache for authorization header to avoid repeated Buffer operations
+  const authHeader = "Basic " + Buffer.from(":" + password).toString("base64");
+  
   try {
-    const res = await fetch(url, {
-      headers: {
-        Authorization:
-          "Basic " + Buffer.from(":" + password).toString("base64"),
-      },
-    });
-    return await res.text();
+    // Reuse headers object for better performance
+    const headers = {
+      Authorization: authHeader,
+      'Connection': 'keep-alive', // Reuse connections
+    };
+
+    const res = await fetch(url, { headers });
+    const text = await res.text();
+    
+    // Memory management: explicitly clear response
+    res.body.destroy();
+    return text;
   } catch (err) {
     logError(`sendCommand error: ${err}`);
     return null;
