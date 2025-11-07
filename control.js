@@ -12,14 +12,31 @@ const fetch = require('node-fetch');
 const fs = require('fs');
 const bodyParser = require('body-parser');
 const http = require('http');
+const https = require('https');
 
-// Configure HTTP agent for connection pooling
-const keepAliveAgent = new http.Agent({
+// Configure connection pooling agents
+const httpAgent = new http.Agent({
   keepAlive: true,
   maxSockets: 4,
   maxFreeSockets: 2,
   timeout: 60000,
 });
+
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  maxSockets: 4,
+  maxFreeSockets: 2,
+  timeout: 60000,
+});
+
+// Helper function to get the appropriate agent based on URL protocol
+function getAgent(url) {
+  try {
+    return url.toLowerCase().startsWith('https://') ? httpsAgent : httpAgent;
+  } catch (err) {
+    return httpAgent; // Default to HTTP agent if URL parsing fails
+  }
+}
 
 // Command batching system for better performance
 class CommandBatcher {
@@ -147,7 +164,7 @@ async function sendCommand(url, password, command = null) {
 
     const res = await fetch(targetUrl, { 
       headers,
-      agent: keepAliveAgent
+      agent: getAgent(targetUrl)
     });
 
     if (!res.ok) {
@@ -255,7 +272,7 @@ async function getVLCStatus(url, password) {
           'Connection': 'keep-alive',
           'Accept': 'application/json',
         },
-        agent: keepAliveAgent,
+        agent: getAgent(url),
       });
 
       if (!res.ok) {
