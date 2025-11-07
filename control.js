@@ -30,23 +30,25 @@ class CommandBatcher {
   }
 
   async addCommand(url, password, command) {
-    const key = `${url}:${command}`;
+    const key = `${url}:${password}`; // Group by endpoint+auth
     
     return new Promise((resolve, reject) => {
       if (!this.queue.has(key)) {
         this.queue.set(key, {
           url,
           password,
-          command,
-          callbacks: [],
+          commands: [], // Array to store multiple commands
+          callbacks: [], // Array of {command, resolve, reject} objects
           timer: setTimeout(() => this.processBatch(key), this.batchTimeout)
         });
       }
       
-      this.queue.get(key).callbacks.push({ resolve, reject });
+      const entry = this.queue.get(key);
+      entry.commands.push(command);
+      entry.callbacks.push({ command, resolve, reject });
       
-      if (this.queue.get(key).callbacks.length >= this.maxBatchSize) {
-        clearTimeout(this.queue.get(key).timer);
+      if (entry.callbacks.length >= this.maxBatchSize) {
+        clearTimeout(entry.timer);
         this.processBatch(key);
       }
     });
@@ -56,13 +58,26 @@ class CommandBatcher {
     const batch = this.queue.get(key);
     this.queue.delete(key);
     
-    if (!batch) return;
-    
+    if (!batch || !batch.commands.length) return;
+
     try {
-      const result = await sendCommand(batch.url, batch.password);
-      batch.callbacks.forEach(({ resolve }) => resolve(result));
+      // Since VLC doesn't support multi-command requests, execute commands sequentially
+      const results = await Promise.all(
+        batch.commands.map(cmd => 
+          sendCommand(batch.url, batch.password, cmd)
+        )
+      );
+
+      // Match results back to the correct callbacks
+      batch.callbacks.forEach(({ command, resolve }, index) => {
+        resolve(results[index]);
+      });
     } catch (error) {
       batch.callbacks.forEach(({ reject }) => reject(error));
+    } finally {
+      if (batch.timer) {
+        clearTimeout(batch.timer);
+      }
     }
   }
 }
@@ -113,26 +128,46 @@ function logError(message) {
 }
 
 // Helper: Send command to VLC
-async function sendCommand(url, password) {
+async function sendCommand(url, password, command = null) {
   // Cache for authorization header to avoid repeated Buffer operations
   const authHeader = "Basic " + Buffer.from(":" + password).toString("base64");
   
   try {
+    // Prepare the URL with command if provided
+    const targetUrl = command 
+      ? `${url}${url.includes('?') ? '&' : '?'}command=${command}`
+      : url;
+
     // Reuse headers object for better performance
     const headers = {
       Authorization: authHeader,
-      'Connection': 'keep-alive', // Reuse connections
+      'Connection': 'keep-alive',
+      'Accept': 'application/json',
     };
 
-    const res = await fetch(url, { headers });
-    const text = await res.text();
-    
-    // Memory management: explicitly clear response
-    res.body.destroy();
-    return text;
+    const res = await fetch(targetUrl, { 
+      headers,
+      agent: keepAliveAgent
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    // Try to parse as JSON first, fall back to text if needed
+    try {
+      const data = await res.json();
+      return data;
+    } catch {
+      const text = await res.text();
+      return { text, raw: true };
+    } finally {
+      // Memory management: explicitly clear response
+      res.body.destroy();
+    }
   } catch (err) {
-    logError(`sendCommand error: ${err}`);
-    return null;
+    logError(`sendCommand error for ${url} command=${command}: ${err}`);
+    throw err; // Propagate error for proper handling by callers
   }
 }
 
