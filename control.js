@@ -213,8 +213,15 @@ async function getVLCStatus(url, password) {
       // Reuse authorization header
       const authHeader = "Basic " + Buffer.from(":" + password).toString("base64");
       
-      // Use connection pooling and command batching
-      const res = await commandBatcher.addCommand(url, password, 'status');
+      // Direct fetch to VLC status endpoint with connection pooling
+      const res = await fetch(url, {
+        headers: {
+          'Authorization': authHeader,
+          'Connection': 'keep-alive',
+          'Accept': 'application/json',
+        },
+        agent: keepAliveAgent,
+      });
 
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
