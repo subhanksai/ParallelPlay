@@ -21,6 +21,54 @@ const keepAliveAgent = new http.Agent({
   timeout: 60000,
 });
 
+// Command batching system for better performance
+class CommandBatcher {
+  constructor() {
+    this.queue = new Map();
+    this.batchTimeout = 50; // 50ms batching window
+    this.maxBatchSize = 5; // Maximum commands per batch
+  }
+
+  async addCommand(url, password, command) {
+    const key = `${url}:${command}`;
+    
+    return new Promise((resolve, reject) => {
+      if (!this.queue.has(key)) {
+        this.queue.set(key, {
+          url,
+          password,
+          command,
+          callbacks: [],
+          timer: setTimeout(() => this.processBatch(key), this.batchTimeout)
+        });
+      }
+      
+      this.queue.get(key).callbacks.push({ resolve, reject });
+      
+      if (this.queue.get(key).callbacks.length >= this.maxBatchSize) {
+        clearTimeout(this.queue.get(key).timer);
+        this.processBatch(key);
+      }
+    });
+  }
+
+  async processBatch(key) {
+    const batch = this.queue.get(key);
+    this.queue.delete(key);
+    
+    if (!batch) return;
+    
+    try {
+      const result = await sendCommand(batch.url, batch.password);
+      batch.callbacks.forEach(({ resolve }) => resolve(result));
+    } catch (error) {
+      batch.callbacks.forEach(({ reject }) => reject(error));
+    }
+  }
+}
+
+const commandBatcher = new CommandBatcher();
+
 // Initialize Express application
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -88,11 +136,67 @@ async function sendCommand(url, password) {
   }
 }
 
+// Circuit breaker implementation
+class CircuitBreaker {
+  constructor(failureThreshold = 5, resetTimeout = 60000) {
+    this.failureCount = new Map();
+    this.lastFailure = new Map();
+    this.failureThreshold = failureThreshold;
+    this.resetTimeout = resetTimeout;
+  }
+
+  async execute(key, operation) {
+    if (this.isOpen(key)) {
+      throw new Error('Circuit breaker is open');
+    }
+
+    try {
+      const result = await operation();
+      this.onSuccess(key);
+      return result;
+    } catch (error) {
+      this.onFailure(key);
+      throw error;
+    }
+  }
+
+  isOpen(key) {
+    const failures = this.failureCount.get(key) || 0;
+    const lastFailure = this.lastFailure.get(key) || 0;
+    
+    if (failures >= this.failureThreshold) {
+      const now = Date.now();
+      if (now - lastFailure >= this.resetTimeout) {
+        this.reset(key);
+        return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  onSuccess(key) {
+    this.reset(key);
+  }
+
+  onFailure(key) {
+    const failures = (this.failureCount.get(key) || 0) + 1;
+    this.failureCount.set(key, failures);
+    this.lastFailure.set(key, Date.now());
+  }
+
+  reset(key) {
+    this.failureCount.delete(key);
+    this.lastFailure.delete(key);
+  }
+}
+
 // VLC status cache and connection pool
 const statusCache = new Map();
 const cacheTTL = 500; // 500ms TTL for cache
+const circuitBreaker = new CircuitBreaker();
 
-// Helper: Get VLC status with caching and connection pooling
+// Helper: Get VLC status with caching, connection pooling, and circuit breaker
 async function getVLCStatus(url, password) {
   const now = Date.now();
   const cacheKey = `${url}:${password}`;
@@ -103,38 +207,44 @@ async function getVLCStatus(url, password) {
     return cached.data;
   }
 
-  try {
-    // Reuse authorization header
-    const authHeader = "Basic " + Buffer.from(":" + password).toString("base64");
-    
-    const res = await fetch(url, {
-      headers: {
-        'Authorization': authHeader,
-        'Connection': 'keep-alive',
-        'Accept': 'application/json',
-      },
-      agent: keepAliveAgent, // Use connection pooling
-    });
+  // Use circuit breaker pattern
+  return await circuitBreaker.execute(url, async () => {
+    try {
+      // Reuse authorization header
+      const authHeader = "Basic " + Buffer.from(":" + password).toString("base64");
+      
+      // Use connection pooling and command batching
+      const res = await commandBatcher.addCommand(url, password, 'status');
 
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      
+      // Update cache with exponential backoff on errors
+      const cacheEntry = {
+        data,
+        timestamp: now,
+        retryCount: 0
+      };
+      
+      statusCache.set(cacheKey, cacheEntry);
+      return data;
+    } catch (err) {
+      const existingEntry = statusCache.get(cacheKey);
+      if (existingEntry) {
+        existingEntry.retryCount = (existingEntry.retryCount || 0) + 1;
+        // Exponential backoff for cache TTL on errors
+        const backoffTTL = Math.min(cacheTTL * Math.pow(2, existingEntry.retryCount), 30000);
+        existingEntry.timestamp = now - cacheTTL + backoffTTL;
+        statusCache.set(cacheKey, existingEntry);
+      }
+      
+      logError(`getVLCStatus error: ${err}`);
+      throw err;
     }
-
-    const data = await res.json();
-    
-    // Update cache
-    statusCache.set(cacheKey, {
-      data,
-      timestamp: now
-    });
-
-    return data;
-  } catch (err) {
-    logError(`getVLCStatus error: ${err}`);
-    // Remove from cache on error
-    statusCache.delete(cacheKey);
-    return null;
-  }
+  });
 }
 
 // Helper: Check fullscreen
