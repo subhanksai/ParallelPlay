@@ -6,23 +6,28 @@ README:
 - Expects VLC web interfaces at http://10.10.10.2:8080 and http://10.10.10.1:8080
 */
 
-const express = require("express");
-const fetch = require("node-fetch");
-const fs = require("fs");
-const bodyParser = require("body-parser");
+// Import required dependencies
+const express = require('express');
+const fetch = require('node-fetch');
+const fs = require('fs');
+const bodyParser = require('body-parser');
+
+// Initialize Express application
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 const LOG_FILE = "control_log.txt";
 const ERROR_LOG_FILE = "control_errors.log";
 const PATHS_FILE = "paths.txt";
 const VLC_URL_MASTER = "http://192.168.127.177:8080/requests/status.json";
 const VLC_URL_SLAVE = "http://192.168.127.141:8080/requests/status.json";
-const PASSWORD = "sairam";
+// TODO: Move this to environment variables for security
+const PASSWORD = 'sairam';
 
+// Configure middleware
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.static("."));
+app.use(express.static(__dirname));
 
 // Default route to serve index.html
 app.get("/", (req, res) => {
