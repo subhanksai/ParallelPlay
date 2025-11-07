@@ -9,6 +9,13 @@ README:
 // Import required dependencies
 const express = require('express');
 const fetch = require('node-fetch');
+// Load environment variables from .env for local development (safe when .env is in .gitignore)
+try {
+  require('dotenv').config();
+} catch (e) {
+  // If dotenv is not installed in some environments that's fine — env vars can come from the system
+}
+const fs = require('fs');
 const fs = require('fs');
 const bodyParser = require('body-parser');
 const http = require('http');
