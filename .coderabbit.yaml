@@ -1,0 +1,49 @@
+# CodeRabbit Configuration File
+
+# Version of the configuration
+version: 1
+
+# General settings
+settings:
+  # Maximum number of lines to analyze per review
+  max_lines: 500
+  # Languages to analyze
+  languages:
+    - javascript
+    - html
+
+# Review settings
+reviews:
+  # Configure how CodeRabbit analyzes pull requests
+  pull_requests:
+    # Maximum number of suggestions per review
+    max_suggestions: 10
+    # Enable or disable specific analysis features
+    enable:
+      - best_practices
+      - code_style
+      - performance
+      - security
+    # Files or patterns to ignore
+    ignore:
+      - "node_modules/**"
+      - "*.log"
+
+# Style settings for JavaScript
+javascript:
+  # Code style rules
+  style:
+    max_line_length: 100
+    indent_size: 2
+    quotes: single
+  # Specific rules to enforce
+  rules:
+    no_console: warn
+    no_unused_vars: error
+
+# Notification settings
+notifications:
+  # Enable notifications for reviews
+  pull_requests: true
+  # Enable notifications for security issues
+  security: true
