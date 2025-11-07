@@ -1,0 +1,19 @@
+{
+  "name": "minimal-electron-express",
+  "version": "1.0.0",
+  "description": "Minimal Electron app with Express backend for Save Paths.",
+  "main": "main.js",
+  "scripts": {
+    "start": "concurrently -k -r \"node control.js\" \"wait-on http://localhost:3000 && electron .\""
+  },
+  "dependencies": {
+    "body-parser": "^1.20.2",
+    "express": "^4.18.2",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "electron": "^28.2.3",
+    "wait-on": "^7.2.0"
+  }
+}

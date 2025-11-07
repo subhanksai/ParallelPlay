@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sri Sathya Sai Parallel Playout</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Georgia', 'Times New Roman', serif;
+      background: linear-gradient(135deg, #1a365d 0%, #2d3748 100%);
+      color: #2d3748;
+      line-height: 1.6;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+      border-radius: 8px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      max-width: 1400px;
+      width: 100%;
+      min-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 2px solid #d69e2e;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #d69e2e 0%, #b7791f 100%);
+      color: white;
+      padding: 24px 32px;
+      border-bottom: 3px solid #744210;
+      position: relative;
+    }
+
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #744210 0%, #d69e2e 50%, #744210 100%);
+    }
+
+    .header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin: 0;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      letter-spacing: 1px;
+    }
+
+    .header-subtitle {
+      font-size: 1rem;
+      margin-top: 8px;
+      opacity: 0.9;
+      font-weight: 400;
+    }
+
+    .header-content {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      justify-content: center;
+    }
+
+    .header-logo {
+      width: 70px;
+      height: 70px;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    }
+
+    .header-text {
+      text-align: left;
+    }
+
+    .main-content {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+      padding: 32px;
+      flex: 1;
+    }
+
+    .panel {
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      position: relative;
+    }
+
+    .panel::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #d69e2e 0%, #744210 50%, #d69e2e 100%);
+      border-radius: 8px 8px 0 0;
+    }
+
+    .panel-header {
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+
+    .panel-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #2d3748;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .panel-subtitle {
+      font-size: 0.875rem;
+      color: #718096;
+      margin-top: 4px;
+      font-style: italic;
+    }
+
+    .button-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .button {
+      background: linear-gradient(135deg, #d69e2e 0%, #b7791f 100%);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 12px 20px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 120px;
+      justify-content: center;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      box-shadow: 0 2px 4px rgba(214, 158, 46, 0.3);
+    }
+
+    .button:hover {
+      background: linear-gradient(135deg, #b7791f 0%, #d69e2e 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(214, 158, 46, 0.4);
+    }
+
+    .button:active {
+      transform: translateY(0);
+    }
+
+    .button.secondary {
+      background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+      box-shadow: 0 2px 4px rgba(74, 85, 104, 0.3);
+    }
+
+    .button.secondary:hover {
+      background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+      box-shadow: 0 6px 12px rgba(74, 85, 104, 0.4);
+    }
+
+    .button.danger {
+      background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+      box-shadow: 0 2px 4px rgba(229, 62, 62, 0.3);
+    }
+
+    .button.danger:hover {
+      background: linear-gradient(135deg, #c53030 0%, #e53e3e 100%);
+      box-shadow: 0 6px 12px rgba(229, 62, 62, 0.4);
+    }
+
+    .button.success {
+      background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+      box-shadow: 0 2px 4px rgba(56, 161, 105, 0.3);
+    }
+
+    .button.success:hover {
+      background: linear-gradient(135deg, #2f855a 0%, #38a169 100%);
+      box-shadow: 0 6px 12px rgba(56, 161, 105, 0.4);
+    }
+
+    .seek-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 12px;
+    }
+
+    .seek-controls input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 2px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      background: white;
+      transition: all 0.3s ease;
+      font-family: 'Georgia', serif;
+    }
+
+    .seek-controls input:focus {
+      outline: none;
+      border-color: #d69e2e;
+      box-shadow: 0 0 0 3px rgba(214, 158, 46, 0.1);
+    }
+
+    .speed-controls {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .speed-option {
+      flex: 1;
+    }
+
+    .speed-controls input[type="radio"] {
+      display: none;
+    }
+
+    .speed-controls label {
+      display: block;
+      padding: 12px 16px;
+      border: 2px solid #e2e8f0;
+      border-radius: 6px;
+      background: white;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #4a5568;
+    }
+
+    .speed-controls label:hover {
+      border-color: #d69e2e;
+      background: #fef5e7;
+      color: #744210;
+    }
+
+    .speed-controls input[type="radio"]:checked+label {
+      background: linear-gradient(135deg, #d69e2e 0%, #b7791f 100%);
+      color: white;
+      border-color: #d69e2e;
+      font-weight: 700;
+      box-shadow: 0 4px 8px rgba(214, 158, 46, 0.3);
+    }
+
+    .speed-reset {
+      margin-top: 16px;
+      text-align: center;
+    }
+
+    .speed-reset .button {
+      font-size: 14px;
+      padding: 8px 16px;
+      background: linear-gradient(135deg, #6b7280, #4b5563);
+      border: 2px solid #374151;
+      color: #f9fafb;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .speed-reset .button:hover {
+      background: linear-gradient(135deg, #4b5563, #374151);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .file-info {
+      background: #f7fafc;
+      border: 2px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 16px;
+      margin-top: 16px;
+      display: none;
+    }
+
+    .file-info.show {
+      display: block;
+    }
+
+    .file-info h3 {
+      font-size: 1.125rem;
+      font-weight: 700;
+      color: #2d3748;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .file-path {
+      font-family: 'Courier New', monospace;
+      font-size: 0.75rem;
+      color: #4a5568;
+      background: white;
+      padding: 8px 12px;
+      border-radius: 4px;
+      border-left: 4px solid #d69e2e;
+      margin: 8px 0;
+      word-break: break-all;
+      border: 1px solid #e2e8f0;
+    }
+
+    .response {
+      background: linear-gradient(135deg, #fef5e7 0%, #fed7aa 100%);
+      border: 2px solid #d69e2e;
+      border-radius: 6px;
+      padding: 16px 24px;
+      margin: 0 32px 24px 32px;
+      color: #744210;
+      font-size: 0.875rem;
+      font-weight: 600;
+      min-height: 24px;
+      display: flex;
+      align-items: center;
+      font-family: 'Georgia', serif;
+    }
+
+    .response::before {
+      content: "•";
+      margin-right: 8px;
+      font-size: 1.5rem;
+      color: #d69e2e;
+    }
+
+    .response.error {
+      background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%);
+      border-color: #e53e3e;
+      color: #742a2a;
+    }
+
+    .response.error::before {
+      content: "•";
+      color: #e53e3e;
+    }
+
+    .response.success {
+      background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%);
+      border-color: #38a169;
+      color: #22543d;
+    }
+
+    .response.success::before {
+      content: "•";
+      color: #38a169;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 2px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      background: white;
+      transition: all 0.3s ease;
+      font-family: 'Georgia', serif;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #d69e2e;
+      box-shadow: 0 0 0 3px rgba(214, 158, 46, 0.1);
+    }
+
+    @media (max-width: 1024px) {
+      .main-content {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+        padding: 24px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      body {
+        padding: 12px;
+      }
+
+      .container {
+        min-height: 95vh;
+      }
+
+      .header {
+        padding: 20px 24px;
+      }
+
+      .header h1 {
+        font-size: 1.5rem;
+      }
+
+      .main-content {
+        grid-template-columns: 1fr;
+        gap: 16px;
+        padding: 20px;
+      }
+
+      .panel {
+        padding: 20px;
+      }
+
+      .button {
+        min-width: 100px;
+        padding: 10px 16px;
+        font-size: 0.8rem;
+      }
+
+      .response {
+        margin: 0 20px 20px 20px;
+        padding: 12px 16px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .button-group {
+        flex-direction: column;
+      }
+
+      .button {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .seek-controls {
+        flex-direction: column;
+      }
+
+      .speed-controls {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-content">
+        <img src="Final logo.png" alt="Sri Sathya Sai Logo" class="header-logo">
+        <div class="header-text">
+          <h1>Sri Sathya Sai Parallel Playout</h1>
+          <div class="header-subtitle">Media Control System</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <!-- File Management Panel -->
+      <div class="panel" id="fileSelectionSection">
+        <div class="panel-header">
+          <div class="panel-title">File Management</div>
+          <div class="panel-subtitle">Select and manage video files for playback</div>
+        </div>
+
+        <div class="form-group">
+          <label for="chooseFileBtn">Video File Selection</label>
+          <button type="button" id="chooseFileBtn" class="button success">
+            Choose File
+          </button>
+        </div>
+
+        <form id="pathsForm" style="display: none;">
+          <div class="form-group">
+            <label for="masterFile">Master File Path</label>
+            <input type="text" id="masterFile" name="masterFile" placeholder="/path/to/master.mp4" required>
+          </div>
+          <div class="form-group">
+            <label for="slaveFile">Slave File Path</label>
+            <input type="text" id="slaveFile" name="slaveFile" placeholder="/path/to/slave.mp4" required>
+          </div>
+        </form>
+
+        <div id="fileInfo" class="file-info">
+          <h3>Selected Files</h3>
+          <div>
+            <strong>Master:</strong>
+            <div class="file-path" id="masterFileName"></div>
+          </div>
+          <div>
+            <strong>Slave:</strong>
+            <div class="file-path" id="slaveFileName"></div>
+          </div>
+          <button type="button" id="changeFileBtn" class="button secondary" style="margin-top: 12px;">
+            Change Files
+          </button>
+        </div>
+      </div>
+
+      <!-- Playback Controls Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Playback Controls</div>
+          <div class="panel-subtitle">Control video playback and synchronization</div>
+        </div>
+
+        <div class="button-group">
+          <button onclick="sendCommand('wakeUp')" class="button success">
+            Test
+          </button>
+        </div>
+
+        <div class="button-group">
+          <button onclick="sendCommand('play')" class="button">
+            Play
+          </button>
+          <button onclick="sendCommand('pause')" class="button secondary">
+            Pause
+          </button>
+          <button onclick="sendCommand('stop')" class="button danger">
+            Stop
+          </button>
+        </div>
+
+        <div class="button-group">
+          <button onclick="sendCommand('fullscreen')" class="button">
+            Fullscreen
+          </button>
+          <button onclick="sendCommand('sync')" class="button">
+            Sync
+          </button>
+        </div>
+      </div>
+
+      <!-- Navigation Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Navigation</div>
+          <div class="panel-subtitle">Navigate through video timeline</div>
+        </div>
+
+        <div class="button-group">
+          <button onclick="sendCommand('skip_backward')" class="button">
+            Skip Backward 10s
+          </button>
+          <button onclick="sendCommand('skip_forward')" class="button">
+            Skip Forward 10s
+          </button>
+        </div>
+
+        <div class="seek-controls">
+          <input type="number" id="seekValue" placeholder="Enter time in seconds">
+          <button onclick="seekTo()" class="button">
+            Seek
+          </button>
+        </div>
+      </div>
+
+      <!-- Speed Control Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Speed Control</div>
+          <div class="panel-subtitle">Adjust playback speed</div>
+        </div>
+
+        <div class="speed-controls">
+          <div class="speed-option">
+            <input type="radio" id="speed05" name="speed" value="0.5">
+            <label for="speed05">0.5x</label>
+          </div>
+          <div class="speed-option">
+            <input type="radio" id="speed10" name="speed" value="1.0">
+            <label for="speed10">1.0x</label>
+          </div>
+          <div class="speed-option">
+            <input type="radio" id="speed15" name="speed" value="1.5">
+            <label for="speed15">1.5x</label>
+          </div>
+        </div>
+        <div class="speed-reset">
+          <button onclick="sendCommand('resetSpeed')" class="button secondary">Reset Speed to 1.0x</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="response" id="responseBox">Ready to control playback</div>
+  </div>
+
+  <script>
+    async function sendCommand(command) {
+      const masterFile = document.getElementById('masterFile').value;
+      const slaveFile = document.getElementById('slaveFile').value;
+      let body = { command };
+      if (masterFile) body.masterFile = masterFile;
+      if (slaveFile) body.slaveFile = slaveFile;
+
+      // If play command is sent, automatically check the 1.0x speed button
+      if (command === 'play') {
+        const speed10Radio = document.getElementById('speed10');
+        if (speed10Radio) {
+          speed10Radio.checked = true;
+        }
+      }
+
+      console.log('Sending command:', command);
+      console.log('Request body:', body);
+
+      if (command === 'seek') {
+        const seekValue = document.getElementById('seekValue').value;
+        if (!seekValue) {
+          showResponse('Please enter a seek value.', 'error');
+          return;
+        }
+        body.seekValue = seekValue;
+      }
+
+      showResponse('Sending command...', 'info');
+
+      try {
+        const res = await fetch('http://localhost:3000/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        console.log('Response status:', res.status);
+        const data = await res.json();
+        console.log('Response data:', data);
+
+        if (data.message) {
+          showResponse(data.message, 'success');
+        } else if (data.error) {
+          showResponse('Error: ' + data.error, 'error');
+        } else {
+          showResponse('No response from server.', 'error');
+        }
+      } catch (err) {
+        console.error('Request failed:', err);
+        showResponse('Request failed: ' + err, 'error');
+      }
+    }
+
+    function seekTo() {
+      sendCommand('seek');
+    }
+
+    async function setSpeed(speed) {
+      console.log('Setting speed to:', speed);
+
+      showResponse(`Setting speed to ${speed}x...`, 'info');
+
+      try {
+        const response = await fetch('http://localhost:3000/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: 'setSpeed', speed: speed })
+        });
+
+        const data = await response.json();
+        if (data.message) {
+          showResponse(data.message, 'success');
+        } else if (data.error) {
+          showResponse('Error: ' + data.error, 'error');
+        }
+      } catch (err) {
+        console.error('Failed to set speed:', err);
+        showResponse('Failed to set speed: ' + err.message, 'error');
+      }
+    }
+
+    function showResponse(msg, type = 'info') {
+      const responseBox = document.getElementById('responseBox');
+      responseBox.textContent = msg;
+      responseBox.className = 'response ' + type;
+    }
+
+    async function autoSavePaths() {
+      const masterFile = document.getElementById('masterFile').value;
+      const slaveFile = document.getElementById('slaveFile').value;
+      console.log('autoSavePaths called with:', { masterFile, slaveFile });
+
+      if (masterFile && slaveFile) {
+        try {
+          console.log('Saving paths to server...');
+          const response = await fetch('http://localhost:3000/control', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: 'savePaths', masterFile, slaveFile })
+          });
+
+          console.log('Save response status:', response.status);
+          const data = await response.json();
+          console.log('Save response data:', data);
+
+          if (data.message) {
+            console.log('Paths saved successfully:', data.message);
+            showResponse('File paths saved successfully.', 'success');
+          } else if (data.error) {
+            console.error('Error saving paths:', data.error);
+            showResponse('Error saving paths: ' + data.error, 'error');
+          }
+
+          updateFileDisplay();
+        } catch (err) {
+          console.error('Failed to save paths:', err);
+          showResponse('Failed to save paths: ' + err.message, 'error');
+        }
+      } else {
+        console.log('Cannot save paths - missing file values');
+      }
+    }
+
+    function updateFileDisplay() {
+      const masterFile = document.getElementById('masterFile').value;
+      const slaveFile = document.getElementById('slaveFile').value;
+      const fileInfo = document.getElementById('fileInfo');
+
+      if (masterFile && slaveFile) {
+        document.getElementById('masterFileName').textContent = masterFile;
+        document.getElementById('slaveFileName').textContent = slaveFile;
+        fileInfo.classList.add('show');
+      } else {
+        fileInfo.classList.remove('show');
+      }
+    }
+
+    document.getElementById('chooseFileBtn').addEventListener('click', async function () {
+      console.log('Choose file button clicked');
+      if (window.electronAPI && window.electronAPI.openFile) {
+        console.log('Electron API available, opening file dialog...');
+        const filePath = await window.electronAPI.openFile();
+        console.log('File selected:', filePath);
+        if (filePath) {
+          console.log('Setting file paths to:', filePath);
+          document.getElementById('masterFile').value = filePath;
+          document.getElementById('slaveFile').value = filePath;
+          console.log('Calling autoSavePaths...');
+          await autoSavePaths();
+        } else {
+          console.log('No file selected');
+        }
+      } else {
+        console.log('Electron API not available');
+        showResponse('File dialog not available. Are you running in Electron?', 'error');
+      }
+    });
+
+    document.getElementById('changeFileBtn').addEventListener('click', function () {
+      document.getElementById('fileInfo').classList.remove('show');
+      // Clear the file inputs to allow new selection
+      document.getElementById('masterFile').value = '';
+      document.getElementById('slaveFile').value = '';
+    });
+
+    window.onload = function () {
+      if (!window.electronAPI) {
+        showResponse('This app must be run using Electron (npm start).', 'error');
+      }
+
+      // Add event listeners for speed radio buttons
+      const speedRadios = document.querySelectorAll('input[name="speed"]');
+      speedRadios.forEach(radio => {
+        radio.addEventListener('change', function () {
+          if (this.checked) {
+            setSpeed(parseFloat(this.value));
+          }
+        });
+      });
+
+      // Add event listener for reset speed button
+      document.addEventListener('click', function (e) {
+        if (e.target && e.target.textContent === 'Reset Speed to 1.0x') {
+          // Check the 1.0x radio button when reset is clicked
+          const speed10Radio = document.getElementById('speed10');
+          if (speed10Radio) {
+            speed10Radio.checked = true;
+          }
+        }
+      });
+
+      fetch('http://localhost:3000/paths.txt')
+        .then(r => r.text())
+        .then(txt => {
+          const lines = txt.split(/\r?\n/);
+          lines.forEach(line => {
+            if (line.startsWith('MASTER_VIDEO_PATH=')) {
+              document.getElementById('masterFile').value = line.replace('MASTER_VIDEO_PATH=', '');
+            }
+            if (line.startsWith('SLAVE_VIDEO_PATH=')) {
+              document.getElementById('slaveFile').value = line.replace('SLAVE_VIDEO_PATH=', '');
+            }
+          });
+          updateFileDisplay();
+        })
+        .catch(() => {
+          showResponse('Ready to control playback', 'info');
+        });
+    }
+  </script>
+</body>
+
+</html>
